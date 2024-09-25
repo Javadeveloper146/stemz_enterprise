@@ -244,6 +244,7 @@ def total_duration_to_string(duration):
     hours, remainder = divmod(total_seconds, 3600)
     minutes, _ = divmod(remainder, 60)
     return f"{hours} hour{'s' if hours != 1 else ''}, {minutes} min{'s' if minutes != 1 else ''}"
+from django.db.models import Func, F
 
 def get_monthly_reports(request):
     """Handle GET requests to return monthly task reports."""
@@ -252,8 +253,11 @@ def get_monthly_reports(request):
             today = timezone.now()
             four_months_ago = today - timedelta(days=120)  # Approximate four months
 
-            # Fetch tasks from the last four months
-            tasks = TaskEntries.objects.filter(created_on__gte=four_months_ago).order_by('user', 'created_on')
+            # Fetch tasks from the last four months, ensuring not to include future dates
+            tasks = TaskEntries.objects.filter(
+                created_on__gte=four_months_ago,
+                created_on__lt=today
+            ).order_by('user', 'created_on')
 
             # Prepare a dictionary to hold tasks by month and date
             monthly_reports = defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: {'total_duration': timedelta(), 'entry_count': 0})))
@@ -273,18 +277,11 @@ def get_monthly_reports(request):
             final_reports = []
             users = UserProfile.objects.all()  # Get all users for 'No entries' handling
 
-            # Sort months, ensuring the current month is first
-            month_order = [
-                today.strftime('%B').lower(),  # Current month first
-                'august', 'july', 'june', 'may', 'april', 'march', 'february', 'january'
-            ]
-            sorted_months = [month for month in month_order if month in monthly_reports]
-
-            for month in sorted_months:
+            for month in monthly_reports.keys():  # Only iterate over existing months
                 month_data = {'month': month, 'data': []}
-
-                # Get the number of days in the current month
-                month_number = list(calendar.month_name).index(month.capitalize())  # Get month number (1-12)
+                
+                # Get the month number for the current month
+                month_number = list(calendar.month_name).index(month.capitalize())
                 max_days = calendar.monthrange(today.year, month_number)[1]  # Get max days in the month
 
                 # Generate dates for the current month
@@ -330,9 +327,7 @@ def get_monthly_reports(request):
     else:
         return JsonResponse({'error': 'GET method required'}, status=405)
     
-    
-    
-def get_month_wise_total_duration_all_users(request):
+def get_month_wise_user_percentage(request):
     if request.method == 'GET':
         try:
             # Get the current date
@@ -340,18 +335,17 @@ def get_month_wise_total_duration_all_users(request):
             # Get the first day of the current month
             first_day_of_current_month = today.replace(day=1)
 
-            # Initialize a dictionary to hold total durations per user and month
+            # Initialize dictionaries for total durations per user and month
             user_month_total_duration = defaultdict(lambda: defaultdict(timedelta))
+            total_month_duration = defaultdict(timedelta)  # Total duration for each month
 
             # Get all users
             users = UserProfile.objects.all()
+            user_names = {user.id: user.username.lower() for user in users}  # Store user names for response
 
             # Iterate through each user
             for user in users:
-                # Store user information
                 user_id = user.id
-                user_name = user.username  # Assuming 'username' is the field name for the user's name
-                user_role = user.role  # Assuming 'role' is the field name for the user's role
 
                 # Iterate through the last four months
                 for month_offset in range(4):
@@ -367,33 +361,34 @@ def get_month_wise_total_duration_all_users(request):
 
                     # Sum up the total_duration for the tasks
                     total_duration = tasks.aggregate(Sum('total_duration'))['total_duration__sum'] or timedelta(0)
-                    user_month_total_duration[user_id][month_start.strftime('%B %Y')] += total_duration
+                    user_month_total_duration[user_id][month_start.strftime('%B')] += total_duration
 
-            # Prepare the result as a list of dictionaries
-            results = []
+                    # Add to the total duration for the month
+                    total_month_duration[month_start.strftime('%B')] += total_duration
+
+            # Prepare the result in a structured format
+            results = defaultdict(dict)
             for user in users:
-                user_id = user.id
-                user_name = user.username  # Assuming 'username' is the field name for the user's name
-                user_role = user.role  # Assuming 'role' is the field name for the user's role
+                user_name = user.username.lower()  # Get the username in lowercase
 
-                # Prepare the monthly totals for the user
-                monthly_totals = []
+                # Prepare monthly percentages for the user
                 for month_offset in range(4):
-                    month_start = (first_day_of_current_month - pd.DateOffset(months=month_offset)).strftime('%B %Y')
-                    total_duration = user_month_total_duration[user_id][month_start]
-                    monthly_totals.append({
-                        'month': month_start,
-                        'total_duration': str(total_duration)  # Convert to string if needed, adjust formatting
-                    })
+                    month_name = (first_day_of_current_month - pd.DateOffset(months=month_offset)).strftime('%B')
+                    total_duration = user_month_total_duration[user.id][month_name]
 
-                results.append({
-                    'user_id': user_id,
-                    'username': user_name,
-                    'role': user_role,
-                    'monthly_totals': monthly_totals
-                })
+                    # Calculate the percentage for this month
+                    if total_month_duration[month_name] > timedelta(0):  # Avoid division by zero
+                        percentage = (total_duration.total_seconds() / total_month_duration[month_name].total_seconds()) * 100
+                    else:
+                        percentage = 0
 
-            return JsonResponse({'month_wise_total_duration': results}, status=200)
+                    if percentage > 0:  # Only include users with a percentage greater than 0
+                        results[month_name][user_name] = round(percentage, 2)  # Store the rounded percentage
+
+            # Convert results to a more readable format
+            formatted_results = {month: dict(users) for month, users in results.items()}
+
+            return JsonResponse({'month_wise_user_percentage': formatted_results}, status=200)
 
         except Exception as e:
             return JsonResponse({'error': str(e)}, status=500)
