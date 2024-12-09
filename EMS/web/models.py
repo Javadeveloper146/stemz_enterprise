@@ -87,3 +87,13 @@ class TaskEntries(models.Model):
             end = timedelta(hours=self.end_time.hour, minutes=self.end_time.minute)
             self.total_duration = end - start
         super(TaskEntries, self).save(*args, **kwargs)
+        
+        
+class Chat(models.Model):
+    user = models.ForeignKey('UserProfile', on_delete=models.CASCADE)
+    text = models.TextField()
+    timestamp = models.DateTimeField(auto_now_add=True)
+    
+    
+    def __str__(self):
+        return f'{self.user}: {self.text[:20]}'

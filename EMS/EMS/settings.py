@@ -26,7 +26,13 @@ SECRET_KEY = 'django-insecure-m-5c*d38zvy^hqh$3rc0%y9_18)!nbb4kzknmrc*qh)wi3(0h$
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 CORS_ALLOW_ALL_ORIGINS = True
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['*']
+
+# CORS_ALLOW_METHODS = [
+#     'GET',
+#     'POST',
+#     'OPTIONS',
+# ]
 
 
 # Application definition
@@ -38,10 +44,17 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    
     'web',
         'rest_framework',
         'corsheaders',
+        'rest_framework_simplejwt',
 ]
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ],
+}
 
 MIDDLEWARE = [
       'corsheaders.middleware.CorsMiddleware',
@@ -52,6 +65,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    # 'EMS.middleware.TokenValidationMiddleware',
 ]
 
 ROOT_URLCONF = 'EMS.urls'
@@ -121,6 +135,16 @@ USE_I18N = True
 USE_TZ = True
 USE_TZ = True
 
+CORS_ALLOWED_ORIGINS = [
+    "https://javadeveloper146.github.io",
+]
+
+CORS_ALLOW_HEADERS = [
+    'content-type',
+    'authorization',
+    'x-requested-with',
+]
+
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/4.2/howto/static-files/
 
@@ -131,3 +155,4 @@ STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+# SECURE_REFERRER_POLICY = 'strict-origin-when-cross-origin'

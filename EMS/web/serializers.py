@@ -1,4 +1,5 @@
 
+from .models import Chat
 from rest_framework import serializers
 from datetime import datetime, time
 
@@ -10,3 +11,8 @@ class TaskDurationSerializer(serializers.Serializer):
     user_id = serializers.IntegerField()
     task_date = serializers.DateField(source='created_on__date')
     total_duration_hours = serializers.FloatField()
+    
+class ChatMessageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Chat
+        fields = ['user_id', 'user', 'text', 'timestamp']
